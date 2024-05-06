@@ -1,7 +1,6 @@
 import type { CommandArgs } from "./command-args.ts";
 import type { ChildProcess, CommandOptions, Output } from "./types.d.ts";
 
-
 export class Command {
     exe: string;
     args?: CommandArgs;
@@ -54,7 +53,7 @@ export class Command {
     outputSync(): Output {
         throw new Error("Not implemented");
     }
-    
+
     spawn(): ChildProcess {
         throw new Error("Not implemented");
     }

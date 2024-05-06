@@ -1,14 +1,15 @@
 import { EMPTY } from "@gnome/strings";
-import type { ChildProcess, CommandOptions, CommandStatus,  Output,Signal } from "../types.d.ts";
+import type { ChildProcess, CommandOptions, CommandStatus, Output, Signal } from "../types.d.ts";
 import { type CommandArgs, convertCommandArgs } from "../command-args.ts";
 import { Command } from "../command.ts";
 
-
 class DenoChildProcess implements ChildProcess {
     #childProcess: Deno.ChildProcess;
+    #options: CommandOptions;
 
-    constructor(childProcess: Deno.ChildProcess) {
+    constructor(childProcess: Deno.ChildProcess, options: CommandOptions) {
         this.#childProcess = childProcess;
+        this.#options = options;
     }
 
     get stdin(): WritableStream<Uint8Array> {
@@ -40,7 +41,15 @@ class DenoChildProcess implements ChildProcess {
     }
 
     async output(): Promise<Output> {
-        return new DenoOutput(await this.#childProcess.output());
+        const out = await this.#childProcess.output();
+
+        return new DenoOutput({
+            stdout: this.#options.stdout === "piped" ? out.stdout : new Uint8Array(0),
+            stderr: this.#options.stderr === "piped" ? out.stderr : new Uint8Array(0),
+            code: out.code,
+            signal: out.signal,
+            success: out.success,
+        });
     }
 
     kill(signo?: Signal): void {
@@ -142,12 +151,9 @@ class DenoOutput implements Output {
 }
 
 export class DenoCommand extends Command {
-   
-
     constructor(exe: string, args?: CommandArgs, options?: CommandOptions) {
-        super(exe, args, options)
+        super(exe, args, options);
     }
-   
 
     outputSync(): Output {
         const args = this.args ? convertCommandArgs(this.args) : undefined;
@@ -156,8 +162,20 @@ export class DenoCommand extends Command {
             args: args,
         } as Deno.CommandOptions;
 
+        options.stdout ??= "piped";
+        options.stderr ??= "piped";
+        options.stdin ??= "inherit";
+
         const process = new Deno.Command(this.exe, options);
-        return new DenoOutput(process.outputSync());
+        const out = process.outputSync();
+
+        return new DenoOutput({
+            stdout: options.stdout === "piped" ? out.stdout : new Uint8Array(0),
+            stderr: options.stderr === "piped" ? out.stderr : new Uint8Array(0),
+            code: out.code,
+            signal: out.signal,
+            success: out.success,
+        });
     }
 
     async output(): Promise<Output> {
@@ -167,11 +185,23 @@ export class DenoCommand extends Command {
             args: args,
         } as Deno.CommandOptions;
 
+        options.stdout ??= "piped";
+        options.stderr ??= "piped";
+        options.stdin ??= "inherit";
+
         const process = new Deno.Command(this.exe, options);
-        return new DenoOutput(await process.output());
+        const out = await process.output();
+
+        return new DenoOutput({
+            stdout: options.stdout === "piped" ? out.stdout : new Uint8Array(0),
+            stderr: options.stderr === "piped" ? out.stderr : new Uint8Array(0),
+            code: out.code,
+            signal: out.signal,
+            success: out.success,
+        });
     }
 
-    spawn() {
+    spawn() : ChildProcess {
         const args = this.args ? convertCommandArgs(this.args) : undefined;
         const options = {
             ...this.options,
@@ -179,6 +209,6 @@ export class DenoCommand extends Command {
         } as Deno.CommandOptions;
 
         const process = new Deno.Command(this.exe, options);
-        return new DenoChildProcess(process.spawn());
+        return new DenoChildProcess(process.spawn(), options);
     }
 }

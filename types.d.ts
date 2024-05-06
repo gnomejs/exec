@@ -99,7 +99,6 @@ export interface ChildProcess extends AsyncDisposable {
     [Symbol.asyncDispose](): Promise<void>;
 }
 
-
 export interface CommandOptions {
     /**
      * The working directory of the process.
@@ -156,4 +155,3 @@ export interface CommandOptions {
      * @default {false} */
     windowsRawArguments?: boolean;
 }
-

@@ -1,7 +1,8 @@
-import { env } from "./mod.ts";
-import { assertEquals as equals } from "jsr:@std/assert@^0.224.0";
+import { output } from "./mod.ts";
+import { assert as ok, assertEquals as equals } from "jsr:@std/assert@^0.224.0";
 
-Deno.test("ensure env loads from mod", () => {
-    env.set("TEST", "value");
-    equals(env.get("TEST"), "value");
+Deno.test("ensure env loads from mod", async () => {
+    const out = await output("deno", ["--version"]);
+    equals(out.code, 0);
+    ok(out.text().includes("deno"));
 });

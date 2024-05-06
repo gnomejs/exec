@@ -3,10 +3,14 @@
     "version": "0.0.0",
     "exports": {
         ".": "./mod.ts",
-        "./env.deno": "./env.deno.ts",
-        "./env.node": "./env.node.ts",
-        "./env.browser": "./env.browser.ts",
-        "./constants": "./constants.ts"
+        "./deno": "./deno/mod.ts",
+        "./node": "./node/mod.ts",
+        "./base": "./base.ts",
+        "./path-finder": "./path-finder.ts",
+        "./splat": "./splat.ts",
+        "./split-arguments": "./split-arguments.ts",
+        "./which": "./which.ts",
+        "./types": "./types.d.ts"
     },
     "compilerOptions": {
         "lib": ["deno.window"]
@@ -27,12 +31,16 @@
     "publish": {
         "include": [
             "mod.ts",
-            "env.deno.ts",
-            "env.node.ts",
-            "env.browser.ts",
-            "constants.ts",
-            "expand.ts",
-            "types.ts",
+            "command.ts",
+            "command-args.ts",
+            "deno/mod.ts",
+            "node/mod.ts",
+            "base.ts",
+            "path-finder.ts",
+            "splat.ts",
+            "split-arguments.ts",
+            "which.ts",
+            "types.d.ts",
             "README.md",
             "LICENSE.md",
             "deno.json"

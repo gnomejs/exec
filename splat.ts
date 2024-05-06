@@ -6,7 +6,7 @@ const match = (array: unknown[], value: string) =>
     ) => (element instanceof RegExp ? element.test(value) : element === value));
 
 /**
- * Options for the `splat` function.
+ * Options for the {@linkcode splat} function.
  */
 export interface SplatOptions {
     /**
@@ -59,14 +59,35 @@ export interface SplatOptions {
     /**
      * The names of positional arguments. This will gather any keys as arguments
      * in the order of the given array.
+     *
+     * @example
+     * ```ts
+     * const args = splat({ foo: "bar", baz: "qux" }, { arguments: ["foo", "baz"] });
+     * console.log(args); // ["bar", "qux"]
+     * ```
      */
     arguments?: string[];
     /**
      * Whether to append the arguments to the end of the command. Defaults to `false`.
+     *
+     * @example
+     * ```ts
+     * const args = splat({ first: 1, foo: "bar", baz: "qux" }, { arguments: ["foo", "baz"], appendArguments: true });
+     * console.log(args); // ["--first", "1", "bar", "qux"]
+     * ```
      */
     appendArguments?: boolean;
 }
 
+/**
+ * An object that contains the options for the {@linkcode splat} function.
+ *
+ * @example
+ * ```ts
+ * const args = splat({ f: "bar", splat: { shortFlag: true } });
+ * console.log(args); // ["-f", "bar"]
+ * ```
+ */
 export interface SplatObject extends Record<string, unknown> {
     splat: SplatOptions;
 }
@@ -93,7 +114,7 @@ export interface SplatObject extends Record<string, unknown> {
 export function splat(
     object: Record<string, unknown> | SplatObject,
     options?: SplatOptions,
-) {
+) : string[] {
     const splat = [];
     let extraArguments = [];
     let separatedArguments = [];

@@ -1,4 +1,4 @@
-# @gnome/env
+# @gnome/exec
 
 <div height=30" vertical-align="top">
 <image src="https://raw.githubusercontent.com/gnomejs/gnomejs/main/assets/icon.png"
@@ -8,73 +8,70 @@
 
 ## Overview
 
-The env provides a uniform way to work with environment variables and
-the path variable across different runtimes such as bun, node, deno,
-cloudflare workers.
+The exec module provides cross-runtime functionality for invoke
+executables.  A unified API is created for deno, node, bun
+to executables such as but not limited to git, which, echo, etc.
 
-Variable expansion is included.
+The API is influenced by Deno's `Deno.Command` api with some ehancements
+such as providing `which` and `whichSync` and converting string or objects
+into an array of arguments for the excutable.
 
 ## Basic Usage
 
 ```typescript
-import { env, HOME, USER } from "@gnome/env";
+import { Command, run, output, type SplatObject, which } from "@gnome/exec";
 
-// get values
-console.log(env.get("USER") || env.get("USERNAME"));
-console.log(env.get(USER)); // gets the os specific name for user
-console.log(env.get(HOME)); // gets the os specific name for home
+// string, array, or objects can be used for "args".
+const cmd1 = new Command("git", "show-ref master", {
+    env: { "MY_VAR": "TEST" },
+    cwd: "../parent"
+});
+const output = await cmd1.output();
 
-// set variable
-env.set("MY_VAR", "test")
-console.log(env.get("MY_VAR"))
+console.log(output); // ->
+// {
+//    code: 0,
+//    signal: undefined,
+//    success: true
+//    stdout: Uint8Array([01, 12..])
+//    stderr: Uint8Array([0])
+// }
 
-// expansion
-env.expand("${MY_VAR}"); // test
-env.expand("${NO_VALUE:-default}"); // default
-console.log(env.get("NO_VALUE")); // undefined
+// the output result has different methods on it..
+console.log(output.text()) // text
+console.log(output.lines()) // string[]
+console.log(output.json()) // will throw if output is not valid json
 
-env.expand("${NO_VALUE:=default}"); // default
-console.log(env.get("NO_VALUE")); // default
+// output is the short hand for new Command().output()
+// and output defaults stdout and stderr to 'piped'
+// which returns the output as Uint8Array
+const text = await output("git", ["show-ref", "master"]).then(o => o.text())
+console.log(text);
 
-try {
-    env.expand("${REQUIRED_VAR:?Environment variable REQUIRED_VAR is missing}");
-} catch(e) {
-    console.log(e.message); // Environment variable REQUIRED_VAR is missing 
+
+// using splat objects only makes sense for complex cli with many
+// arguments so that you can create interfaces that provide type info and
+// intellisense for users. 
+export interface DotnetBuild extends SplatObject {
+    project: string
+    verbosity?: string
 }
 
-// proxy object to allow get/set/delete similar to process.env
-console.log(env.values.MY_VAR);
+const dotnet = await which("dotnet")
 
-// undefined will remove a value
-env.merge({
-    "VAR2": "VALUE",
-    "MY_VAR": undefined
-});
-
-env.set("MY_VAR", "test")
-env.remove("MY_VAR");
-
-// append to the end of the environment path variables
-env.path.append("/opt/test/bin");
-
-// prepends the path
-env.path.prepend("/opt/test2/bin");
-env.path.has("/opt/test2/bin");
-
-// removes the path. on windows this is case insensitive.
-env.path.remove("/opt/test2/bin");
-
-// replaces the path.
-env.path.replace("/opt/test/bin", "/opt/test2/bin")
-
-console.log(env.path.split()); 
-console.log(env.path) // the full path string
-console.log(env.path.toString()) // the full path string
-
-const path = env.path.get()
-
-// overwrites the environment's PATH variable
-env.path.overwite(`${PATH}:/opt/test4/bin`) 
+if (dotnet) {
+    // run will set stdout and stderr to 'inherit' 
+    // and execute the command.  'inherit' sets the output 
+    // to be written node, bun, deno's stdout.
+    // dotnet build . --verbosity minimal
+    await run(dotnet, { 
+        project: ".",
+        verbosity: "minimal",
+        splat: {
+            command: ["build"]
+        }
+    } as DotnetBuild);
+}
 ```
 
 [MIT License](./LICENSE.md)

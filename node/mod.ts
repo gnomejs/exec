@@ -1,10 +1,5 @@
 import type { ChildProcess, CommandOptions, CommandStatus, Output, Signal } from "../types.d.ts";
-import {
-    type ChildProcess as Node2ChildProcess,
-    type IOType,
-    spawn,
-    spawnSync,
-} from "node:child_process";
+import { type ChildProcess as Node2ChildProcess, type IOType, spawn, spawnSync } from "node:child_process";
 import { type CommandArgs, convertCommandArgs } from "../command-args.ts";
 import { Command } from "../command.ts";
 
@@ -274,11 +269,9 @@ class NodeChildProcess implements ChildProcess {
 }
 
 export class NodeCommand extends Command {
-
     constructor(exe: string, args: CommandArgs, options: CommandOptions) {
         super(exe, args, options);
     }
-
 
     runSync(): Output {
         const args = this.args ? convertCommandArgs(this.args) : [];
@@ -310,16 +303,18 @@ export class NodeCommand extends Command {
     async output(): Promise<Output> {
         const args = this.args ? convertCommandArgs(this.args) : [];
 
+        console.log(this.exe);
+        console.log(args);
         let signal: AbortSignal | undefined;
         if (this.options?.signal) {
-            const cts = new AbortController();
-            signal = cts.signal;
-            this.options.signal.addEventListener("abort", () => {
-                cts.abort();
-            });
+            signal = this.options.signal;
         }
 
         const o = this.options ?? {};
+
+        o.stdin ??= "inherit";
+        o.stdout ??= "piped";
+        o.stderr ??= "piped";
 
         const child = spawn(this.exe, args, {
             cwd: o.cwd,
@@ -334,10 +329,11 @@ export class NodeCommand extends Command {
 
         let stdout = new Uint8Array(0);
         let stderr = new Uint8Array(0);
+
         let code = 1;
         let sig: string | Signal | undefined;
 
-        const promises : Promise<void>[] = [];
+        const promises: Promise<void>[] = [];
         if (child.stdout !== null) {
             child.stdout.on("data", (data) => {
                 stdout = new Uint8Array([...stdout, ...data]);
@@ -349,46 +345,52 @@ export class NodeCommand extends Command {
                 stderr = new Uint8Array([...stderr, ...data]);
             });
         }
-        
-        promises.push(new Promise<void>((resolve) => {
-            if (child.stdout === null) {
-                resolve();
-                return;
-            }
 
-            child.stdout.on("end", () => {
-                resolve();
-            });
-        }));
+        promises.push(
+            new Promise<void>((resolve) => {
+                if (child.stdout === null) {
+                    resolve();
+                    return;
+                }
 
-        promises.push(new Promise<void>((resolve) => {
-            if (child.stderr === null) {
-                resolve();
-                return;
-            }
+                child.stdout.on("end", () => {
+                    resolve();
+                });
+            }),
+        );
 
-            child.stderr.on("end", () => {
-                resolve();
-            });
-        }));
+        promises.push(
+            new Promise<void>((resolve) => {
+                if (child.stderr === null) {
+                    resolve();
+                    return;
+                }
 
-        promises.push(new Promise<void>((resolve) => {
-            child.on("exit", (c, s) => {
-                code = c ? c : 1;
-                sig = s == null ? undefined : s;
-                resolve();
-            });
-        }));
+                child.stderr.on("end", () => {
+                    resolve();
+                });
+            }),
+        );
 
-        await Promise.all(promises);    
-   
+        promises.push(
+            new Promise<void>((resolve) => {
+                child.on("exit", (c, s) => {
+                    code = c !== null ? c : 1;
+                    sig = s === null ? undefined : s;
+                    resolve();
+                });
+            }),
+        );
+
+        await Promise.all(promises);
+
         return new NodeOutput({
             stdout: stdout,
             stderr: stderr,
             code: code,
             signal: sig,
             success: code === 0,
-        } as NodeCommonOutput)
+        } as NodeCommonOutput);
     }
 
     outputSync(): Output {
@@ -397,6 +399,10 @@ export class NodeCommand extends Command {
         const o = {
             ...this.options,
         };
+
+        o.stdin ??= "inherit";
+        o.stdout ??= "piped";
+        o.stderr ??= "piped";
 
         const child = spawnSync(this.exe, args, {
             cwd: o.cwd,
@@ -422,8 +428,10 @@ export class NodeCommand extends Command {
 
         const o = {
             ...this.options,
-            stdio: "inherit",
         };
+        o.stdout ??= "inherit";
+        o.stderr ??= "inherit";
+        o.stdin ??= "inherit";
         const stdin = mapPipe(o.stdin);
         const stdout = mapPipe(o.stdout);
         const stderr = mapPipe(o.stderr);

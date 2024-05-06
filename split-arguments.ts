@@ -37,6 +37,11 @@ export function splitArguments(value: string): string[] {
         const c = value[i];
 
         if (quote > Quote.None) {
+            if ((c === "'" || c === '"') && value[i - 1] === "\\") {
+                token = token.slice(0, token.length - 1) + c;
+                continue;
+            }
+
             if (quote === Quote.Single && c === "'") {
                 quote = Quote.None;
                 tokens.push(token);
@@ -95,13 +100,27 @@ export function splitArguments(value: string): string[] {
             continue;
         }
 
-        if (token.length === 0) {
-            if (c === "'") {
-                quote = Quote.Single;
+        if (c === "\\") {
+            const next = value[i + 1];
+            if (next === " " || next === "'" || next === '"') {
+                token += c;
+                token += next;
+                i++;
+                continue;
+            } else {
+                token += c;
                 continue;
             }
-            if (c === '"') {
-                quote = Quote.Double;
+        }
+
+        if (token.length === 0) {
+            if (c === "'" || c === '"') {
+                if (value[i - 1] === "\\") {
+                    token += c;
+                    continue;
+                }
+
+                quote = c === "'" ? Quote.Single : Quote.Double;
                 continue;
             }
         }

@@ -21,3 +21,4 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Code Comments are licensed/copyrighted under
 [Deno's STD MIT license](https://github.com/denoland/deno_std/blob/main/LICENSE)
+[darg's MIT license](https://github.com/sindresorhus/dargs/blob/main/license)
