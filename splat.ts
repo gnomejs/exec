@@ -114,7 +114,7 @@ export interface SplatObject extends Record<string, unknown> {
 export function splat(
     object: Record<string, unknown> | SplatObject,
     options?: SplatOptions,
-) : string[] {
+): string[] {
     const splat = [];
     let extraArguments = [];
     let separatedArguments = [];

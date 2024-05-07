@@ -201,7 +201,7 @@ export class DenoCommand extends Command {
         });
     }
 
-    spawn() : ChildProcess {
+    spawn(): ChildProcess {
         const args = this.args ? convertCommandArgs(this.args) : undefined;
         const options = {
             ...this.options,

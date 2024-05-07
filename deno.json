@@ -1,11 +1,12 @@
 {
     "name": "@gnome/exec",
-    "version": "0.0.0",
+    "version": "0.1.0",
     "exports": {
         ".": "./mod.ts",
         "./deno": "./deno/mod.ts",
         "./node": "./node/mod.ts",
-        "./base": "./base.ts",
+        "./command": "./base.ts",
+        "./command-args.ts": "./command-args.ts",
         "./path-finder": "./path-finder.ts",
         "./splat": "./splat.ts",
         "./split-arguments": "./split-arguments.ts",

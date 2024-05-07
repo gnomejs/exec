@@ -30,6 +30,11 @@ export interface PathFinderOptions {
     cached?: string;
 
     /**
+     * A flag indicating if the cached path should be ignored.
+     */
+    noCache?: boolean;
+
+    /**
      * An array of additional paths for the path finder on Windows.
      * Environment variables can be used in the paths.
      *
@@ -188,11 +193,11 @@ export class PathFinder {
     }
 
     /**
-     * Synchronously finds the executable path for a given name.
+     * Finds the executable path for a given name.
      * @param name - The name of the executable.
      * @returns The executable path, or undefined if not found.
      */
-    async findExeSync(name: string): Promise<string | undefined> {
+    async findExe(name: string): Promise<string | undefined> {
         let options = this.find(name);
         if (!options) {
             options = {
@@ -205,20 +210,27 @@ export class PathFinder {
 
         if (options?.envVariable) {
             let envPath = env.get(options.envVariable);
-            if (envPath) {
-                envPath = await which(envPath);
-                if (envPath && await isFile(envPath)) {
-                    return envPath;
-                }
+            if (!options.noCache && envPath && envPath.length > 0 && options.cached === envPath) {
+                return envPath;
+            }
+
+            envPath = env.expand(envPath ?? "");
+            if (!options.noCache && envPath && envPath.length > 0 && options.cached === envPath) {
+                return envPath;
+            }
+
+            if (envPath && await isFile(envPath)) {
+                options.cached = envPath;
+                return envPath;
             }
         }
 
-        if (options.cached) {
+        if (!options.noCache && options.cached) {
             return options.cached;
         }
 
         const defaultPath = await which(name);
-        if (defaultPath && await isFile(defaultPath)) {
+        if (defaultPath) {
             options.cached = defaultPath;
             return defaultPath;
         }
@@ -235,6 +247,8 @@ export class PathFinder {
                     }
                 }
             }
+
+            return undefined;
         }
 
         if (DARWIN) {
@@ -249,6 +263,9 @@ export class PathFinder {
                     }
                 }
             }
+
+            // allow darwin to use linux paths
+            // do not return here
         }
 
         if (options.linux && options.linux.length) {
@@ -267,11 +284,11 @@ export class PathFinder {
     }
 
     /**
-     * Finds the executable path for a given name.
+     * Synchronously finds the executable path for a given name.
      * @param name - The name of the executable.
      * @returns The executable path, or undefined if not found.
      */
-    findExe(name: string): string | undefined {
+    findExeSync(name: string): string | undefined {
         let options = this.find(name);
         if (!options) {
             options = {
@@ -284,20 +301,29 @@ export class PathFinder {
 
         if (options?.envVariable) {
             let envPath = env.get(options.envVariable);
+            if (!options.noCache && envPath && envPath.length > 0 && options.cached === envPath) {
+                return envPath;
+            }
+
+            envPath = env.expand(envPath ?? "");
+            if (!options.noCache && envPath && envPath.length > 0 && options.cached === envPath) {
+                return envPath;
+            }
+
             if (envPath) {
-                envPath = whichSync(envPath);
                 if (envPath && isFileSync(envPath)) {
+                    options.cached = envPath;
                     return envPath;
                 }
             }
         }
 
-        if (options.cached) {
+        if (!options.noCache && options.cached) {
             return options.cached;
         }
 
         const defaultPath = whichSync(name);
-        if (defaultPath && isFileSync(defaultPath)) {
+        if (defaultPath) {
             options.cached = defaultPath;
             return defaultPath;
         }
@@ -314,6 +340,8 @@ export class PathFinder {
                     }
                 }
             }
+
+            return undefined;
         }
 
         if (DARWIN) {
@@ -328,6 +356,9 @@ export class PathFinder {
                     }
                 }
             }
+
+            // allow darwin to use linux paths
+            // do not return here
         }
 
         if (options.linux && options.linux.length) {
@@ -349,4 +380,4 @@ export class PathFinder {
 /**
  * The default global path finder instance.
  */
-export const pathFinder : PathFinder = new PathFinder();
+export const pathFinder: PathFinder = new PathFinder();
