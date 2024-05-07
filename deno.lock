@@ -3,7 +3,7 @@
   "packages": {
     "specifiers": {
       "jsr:@gnome/char@^0.0.0": "jsr:@gnome/char@0.0.0",
-      "jsr:@gnome/env@^0.0.0": "jsr:@gnome/env@0.0.0",
+      "jsr:@gnome/env@^0.1.0": "jsr:@gnome/env@0.1.0",
       "jsr:@gnome/errors@^0.0.0": "jsr:@gnome/errors@0.0.0",
       "jsr:@gnome/fs@^0.0.0": "jsr:@gnome/fs@0.0.0",
       "jsr:@gnome/os-constants@^0.0.0": "jsr:@gnome/os-constants@0.0.0",
@@ -23,10 +23,12 @@
       "@gnome/char@0.0.0": {
         "integrity": "e4791f67aa6b8e32e603b3e2fd21a3f1d0b4c9a2ac9465ff22a71c8476b24be5"
       },
-      "@gnome/env@0.0.0": {
-        "integrity": "9ca4454a6d0ae34c354c7ff4c8f00bf8472f26d7c55618087f804d2f728db3e3",
+      "@gnome/env@0.1.0": {
+        "integrity": "f9883914317486ab5728794aaf4fb7f78b81490b4bd7b6c5fe1c4974196fe4da",
         "dependencies": [
-          "jsr:@gnome/char@^0.0.0"
+          "jsr:@gnome/char@^0.0.0",
+          "jsr:@gnome/os-constants@^0.0.0",
+          "jsr:@gnome/strings@^0.1.0"
         ]
       },
       "@gnome/errors@0.0.0": {
@@ -102,7 +104,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@gnome/char@^0.0.0",
-      "jsr:@gnome/env@^0.0.0",
+      "jsr:@gnome/env@^0.1.0",
       "jsr:@gnome/errors@^0.0.0",
       "jsr:@gnome/fs@^0.0.0",
       "jsr:@gnome/os-constants@^0.0.0",

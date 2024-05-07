@@ -49,7 +49,7 @@
     },
     "imports": {
         "@gnome/char": "jsr:@gnome/char@^0.0.0",
-        "@gnome/env": "jsr:@gnome/env@^0.0.0",
+        "@gnome/env": "jsr:@gnome/env@^0.1.0",
         "@gnome/errors": "jsr:@gnome/errors@^0.0.0",
         "@gnome/fs": "jsr:@gnome/fs@^0.0.0",
         "@gnome/os-constants": "jsr:@gnome/os-constants@^0.0.0",
