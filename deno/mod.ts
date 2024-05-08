@@ -166,7 +166,7 @@ export class DenoCommand extends Command {
         options.stderr ??= "piped";
         options.stdin ??= "inherit";
 
-        const process = new Deno.Command(this.exe, options);
+        const process = new Deno.Command(this.file, options);
         const out = process.outputSync();
 
         return new DenoOutput({
@@ -189,7 +189,7 @@ export class DenoCommand extends Command {
         options.stderr ??= "piped";
         options.stdin ??= "inherit";
 
-        const process = new Deno.Command(this.exe, options);
+        const process = new Deno.Command(this.file, options);
         const out = await process.output();
 
         return new DenoOutput({
@@ -208,7 +208,7 @@ export class DenoCommand extends Command {
             args: args,
         } as Deno.CommandOptions;
 
-        const process = new Deno.Command(this.exe, options);
+        const process = new Deno.Command(this.file, options);
         return new DenoChildProcess(process.spawn(), options);
     }
 }

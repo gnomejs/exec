@@ -10,7 +10,7 @@
  * ## Basic Usage
  *
  * ```typescript
- * import { Command, run, output, type SplatObject, which } from "@gnome/exec";
+ * import { Command, command, run, output, which } from "@gnome/exec";
  *
  * // string, array, or objects can be used for "args".
  * const cmd1 = new Command("git", "show-ref master", {
@@ -33,35 +33,29 @@
  * console.log(output.lines()) // string[]
  * console.log(output.json()) // will throw if output is not valid json
  *
+ * const cmd1 = command("git", "show-ref master");
+ *
+ * // these are the same.
+ * console.log(await cmd1.output())
+ * console.log(await cmd1);
+ * console.log(await new Command("git", "show-ref master"));
+ *
+ * console.log(await cmd1.text()); // get only the text from stdout instead
+ *
+ * // pipe commands together
+ * const result = await new Command("echo", ["my test"])
+ *     .pipe("grep", ["test"])
+ *     .pipe("cat")
+ *    .output();
+ *
+ * console.log(result.code);
+ * console.log(result.stdout);
+ *
  * // output is the short hand for new Command().output()
  * // and output defaults stdout and stderr to 'piped'
  * // which returns the output as Uint8Array
  * const text = await output("git", ["show-ref", "master"]).then(o => o.text())
  * console.log(text);
- *
- * // using splat objects only makes sense for complex cli with many
- * // arguments so that you can create interfaces that provide type info and
- * // intellisense for users.
- * export interface DotnetBuild extends SplatObject {
- *     project: string
- *     verbosity?: string
- * }
- *
- * const dotnet = await which("dotnet")
- *
- * if (dotnet) {
- *     // run will set stdout and stderr to 'inherit'
- *     // and execute the command.  'inherit' sets the output
- *     // to be written node, bun, deno's stdout.
- *     // dotnet build . --verbosity minimal
- *     await run(dotnet, {
- *        project: ".",
- *         verbosity: "minimal",
- *         splat: {
- *             command: ["build"]
- *         }
- *     } as DotnetBuild);
- * }
  * ```
  * @module
  */

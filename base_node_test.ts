@@ -96,3 +96,36 @@ Deno.test({
     },
     ignore: !echo,
 });
+
+Deno.test("Command as promise", async () => {
+    const output = await new Command("echo", ["hello"]);
+    equals(output.code, 0);
+    equals(output.text(), "hello\n");
+});
+
+Deno.test("Command return text", async () => {
+    const cmd = new Command("echo", ["hello"]);
+    const output = await cmd.text();
+    equals(output, "hello\n");
+});
+
+Deno.test("Command return lines", async () => {
+    const cmd = new Command("echo", ["hello"]);
+    const output = await cmd.lines();
+    equals(output.length, 2);
+    equals(output[0], "hello");
+    equals(output[1], "");
+});
+
+Deno.test({
+    name: "Command with pipe to invoke echo, grep, and cat",
+    fn: async () => {
+        const result = await new Command("echo", "my test")
+            .pipe("grep", "test")
+            .pipe("cat")
+            .output();
+
+        equals(result.code, 0);
+        console.log(result.text());
+    },
+});

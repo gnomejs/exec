@@ -157,7 +157,9 @@ class NodeChildProcess implements ChildProcess {
                 }
 
                 child.stdout.on("data", (data) => {
-                    controller.enqueue(data);
+                    if (data instanceof Uint8Array) {
+                        controller.enqueue(data);
+                    }
                 });
 
                 child.stdout.on("end", () => {
@@ -209,6 +211,12 @@ class NodeChildProcess implements ChildProcess {
         const stream = new WritableStream<Uint8Array>({
             write(chunk) {
                 child.stdin?.write(chunk);
+            },
+            close() {
+                child.stdin?.end();
+            },
+            abort() {
+                child.stdin?.end();
             },
         });
 
@@ -281,7 +289,7 @@ export class NodeCommand extends Command {
             stdio: "pipe",
         };
 
-        const child = spawnSync(this.exe, args, {
+        const child = spawnSync(this.file, args, {
             cwd: o.cwd,
             env: o.env,
             gid: o.gid,
@@ -302,9 +310,6 @@ export class NodeCommand extends Command {
 
     async output(): Promise<Output> {
         const args = this.args ? convertCommandArgs(this.args) : [];
-
-        console.log(this.exe);
-        console.log(args);
         let signal: AbortSignal | undefined;
         if (this.options?.signal) {
             signal = this.options.signal;
@@ -316,7 +321,7 @@ export class NodeCommand extends Command {
         o.stdout ??= "piped";
         o.stderr ??= "piped";
 
-        const child = spawn(this.exe, args, {
+        const child = spawn(this.file, args, {
             cwd: o.cwd,
             env: o.env,
             gid: o.gid,
@@ -404,7 +409,7 @@ export class NodeCommand extends Command {
         o.stdout ??= "piped";
         o.stderr ??= "piped";
 
-        const child = spawnSync(this.exe, args, {
+        const child = spawnSync(this.file, args, {
             cwd: o.cwd,
             env: o.env,
             gid: o.gid,
@@ -436,7 +441,7 @@ export class NodeCommand extends Command {
         const stdout = mapPipe(o.stdout);
         const stderr = mapPipe(o.stderr);
 
-        const child = spawn(this.exe, args, {
+        const child = spawn(this.file, args, {
             cwd: o.cwd,
             env: o.env,
             gid: o.gid,

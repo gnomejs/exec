@@ -19,7 +19,7 @@ into an array of arguments for the excutable.
 ## Basic Usage
 
 ```typescript
-import { Command, run, output, type SplatObject, which } from "@gnome/exec";
+import { Command, command, run, output, type SplatObject, which } from "@gnome/exec";
 
 // string, array, or objects can be used for "args".
 const cmd1 = new Command("git", "show-ref master", {
@@ -41,6 +41,12 @@ console.log(output); // ->
 console.log(output.text()) // text
 console.log(output.lines()) // string[]
 console.log(output.json()) // will throw if output is not valid json
+
+const cmd1 = command("git", "show-ref master");
+
+// these are the same.
+console.log(await cmd1.output()) 
+console.log(await cmd1); 
 
 // output is the short hand for new Command().output()
 // and output defaults stdout and stderr to 'piped'
