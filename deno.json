@@ -6,7 +6,7 @@
         "./deno": "./deno/mod.ts",
         "./node": "./node/mod.ts",
         "./command": "./base.ts",
-        "./command-args.ts": "./command-args.ts",
+        "./command-args": "./command-args.ts",
         "./path-finder": "./path-finder.ts",
         "./splat": "./splat.ts",
         "./split-arguments": "./split-arguments.ts",
