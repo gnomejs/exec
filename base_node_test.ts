@@ -132,6 +132,12 @@ Deno.test({
     },
 });
 
+Deno.test("Command with json", async () => {
+    const cmd = new Command("echo", ["{\"hello\": \"world\"}"]);
+    const output = await cmd.json() as Record<string, string>;
+    equals(output.hello, "world");
+});
+
 class Pwsh extends ShellCommand {
     constructor(script: string, options?: ShellCommandOptions) {
         super("pwsh", script, options);
@@ -153,6 +159,26 @@ class Pwsh extends ShellCommand {
     }
 }
 
+Deno.test("ShellCommand - Get shell args", () => {
+    const cmd = new Pwsh("hello.ps1");
+    const args = cmd.getShellArgs("hello.ps1", true);
+    equals(args.length, 7);
+    equals(args[0], "-NoProfile");
+    equals(args[1], "-NonInteractive");
+    equals(args[2], "-NoLogo");
+    equals(args[3], "-ExecutionPolicy");
+    equals(args[4], "ByPass");
+    equals(args[5], "-File");
+});
+
+Deno.test("ShellCommand - Get ext", () => {
+    const cmd = new Pwsh("Write-Host 'Hello, World!'");
+    const ext = cmd.ext;
+    equals(ext, ".ps1");
+});
+
+
+
 Deno.test("ShellCommand with inline", async () => {
     const cmd = new Pwsh("Write-Host 'Hello, World!'");
     const output = await cmd.output();
@@ -168,3 +194,14 @@ Deno.test("ShellCommand with file", async () => {
     equals(output.text(), "Hello, World!\n");
     await remove("hello.ps1");
 });
+
+Deno.test("ShellCommand with spawn", async () => {
+    await writeTextFile("hello2.ps1", "Write-Host 'Hello, World!'");
+    const cmd = new Pwsh("hello2.ps1", { stdout: "piped", stderr: "piped" });
+    await using process = cmd.spawn();
+
+    const output = await process.output();
+    equals(output.code, 0);
+    equals(output.text(), "Hello, World!\n");
+    await remove("hello2.ps1");
+})
