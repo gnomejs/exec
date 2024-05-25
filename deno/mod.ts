@@ -1,7 +1,8 @@
 import { EMPTY } from "@gnome/strings";
 import type { ChildProcess, CommandOptions, CommandStatus, Output, Signal } from "../types.d.ts";
 import { type CommandArgs, convertCommandArgs } from "../command-args.ts";
-import { Command } from "../command.ts";
+import { Command, ShellCommand } from "../command.ts";
+import { remove, removeSync } from "@gnome/fs";
 
 class DenoChildProcess implements ChildProcess {
     #childProcess: Deno.ChildProcess;
@@ -56,7 +57,13 @@ class DenoChildProcess implements ChildProcess {
         return this.#childProcess.kill(signo);
     }
 
+    onDispose: (() => void) | undefined;
+
     [Symbol.asyncDispose](): Promise<void> {
+        if (this.onDispose) {
+            this.onDispose();
+        }
+
         return this.#childProcess[Symbol.asyncDispose]();
     }
 }
@@ -210,5 +217,103 @@ export class DenoCommand extends Command {
 
         const process = new Deno.Command(this.file, options);
         return new DenoChildProcess(process.spawn(), options);
+    }
+}
+
+export class DenoShellCommand extends ShellCommand {
+    outputSync(): Output {
+        const { file, generated } = this.getScriptFile();
+        const isFile = file !== undefined;
+        try {
+            const args = this.getShellArgs(isFile ? file : this.script, isFile);
+            if (isFile && this.args) {
+                const splat = convertCommandArgs(this.args);
+                args.push(...splat);
+            }
+
+            const options = {
+                ...this.options,
+                args: args,
+            };
+
+            options.stdout ??= "piped";
+            options.stderr ??= "piped";
+            options.stdin ??= "inherit";
+
+            const process = new Deno.Command(this.file, options);
+            const out = process.outputSync();
+
+            return new DenoOutput({
+                stdout: options.stdout === "piped" ? out.stdout : new Uint8Array(0),
+                stderr: options.stderr === "piped" ? out.stderr : new Uint8Array(0),
+                code: out.code,
+                signal: out.signal,
+                success: out.success,
+            });
+        } finally {
+            if (isFile && generated) {
+                removeSync(file);
+            }
+        }
+    }
+
+    async output(): Promise<Output> {
+        const { file, generated } = this.getScriptFile();
+        const isFile = file !== undefined;
+        try {
+            const args = this.getShellArgs(isFile ? file : this.script, isFile);
+            if (isFile && this.args) {
+                const splat = convertCommandArgs(this.args);
+                args.push(...splat);
+            }
+
+            const options = {
+                ...this.options,
+                args: args,
+            } as Deno.CommandOptions;
+
+            options.stdout ??= "piped";
+            options.stderr ??= "piped";
+            options.stdin ??= "inherit";
+
+            const process = new Deno.Command(this.file, options);
+            const out = await process.output();
+
+            return new DenoOutput({
+                stdout: options.stdout === "piped" ? out.stdout : new Uint8Array(0),
+                stderr: options.stderr === "piped" ? out.stderr : new Uint8Array(0),
+                code: out.code,
+                signal: out.signal,
+                success: out.success,
+            });
+        } finally {
+            if (isFile && generated) {
+                await remove(file);
+            }
+        }
+    }
+
+    spawn(): ChildProcess {
+        const { file, generated } = this.getScriptFile();
+        const isFile = file !== undefined;
+        const args = this.getShellArgs(isFile ? file : this.script, isFile);
+        if (isFile && this.args) {
+            const splat = convertCommandArgs(this.args);
+            args.push(...splat);
+        }
+
+        const options = {
+            ...this.options,
+            args: args,
+        } as Deno.CommandOptions;
+
+        const process = new Deno.Command(this.file, options);
+        const proc = new DenoChildProcess(process.spawn(), options);
+        proc.onDispose = () => {
+            if (isFile && generated) {
+                removeSync(file);
+            }
+        };
+        return proc;
     }
 }

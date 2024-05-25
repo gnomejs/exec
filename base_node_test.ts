@@ -5,10 +5,12 @@ import {
     assertFalse as no,
     assertNotEquals as notEquals,
 } from "jsr:@std/assert@0.225.0";
-import { Command } from "./base.ts";
+import { Command, ShellCommand } from "./base.ts";
 import { WINDOWS } from "@gnome/os-constants";
 import { which } from "./which.ts";
 import { env } from "@gnome/env";
+import type { ShellCommandOptions } from "./command.ts";
+import { remove, writeTextFile } from "@gnome/fs";
 
 const echo = await which("echo");
 const ls = await which("ls");
@@ -128,4 +130,41 @@ Deno.test({
         equals(result.code, 0);
         console.log(result.text());
     },
+});
+
+class Pwsh extends ShellCommand {
+    constructor(script: string, options?: ShellCommandOptions) {
+        super("pwsh", script, options);
+    }
+
+    override get ext(): string {
+        return ".ps1";
+    }
+
+    override getShellArgs(script: string, isFile: boolean): string[] {
+        const params = this.shellArgs ?? ["-NoProfile", "-NonInteractive", "-NoLogo", "-ExecutionPolicy", "ByPass"];
+        if (isFile) {
+            params.push("-File", script);
+        } else {
+            params.push("-Command", script);
+        }
+
+        return params;
+    }
+}
+
+Deno.test("ShellCommand with inline", async () => {
+    const cmd = new Pwsh("Write-Host 'Hello, World!'");
+    const output = await cmd.output();
+    equals(output.code, 0);
+    equals(output.text(), "Hello, World!\n");
+});
+
+Deno.test("ShellCommand with file", async () => {
+    await writeTextFile("hello.ps1", "Write-Host 'Hello, World!'");
+    const cmd = new Pwsh("hello.ps1");
+    const output = await cmd.output();
+    equals(output.code, 0);
+    equals(output.text(), "Hello, World!\n");
+    await remove("hello.ps1");
 });

@@ -1,5 +1,5 @@
 import type { CommandArgs } from "./command-args.ts";
-import { Command as CommandType } from "./command.ts";
+import { Command as CommandType, ShellCommand as ShellCommandType } from "./command.ts";
 import type { ChildProcess, CommandOptions, Output } from "./types.d.ts";
 // deno-lint-ignore no-explicit-any
 const g = globalThis as any;
@@ -8,15 +8,20 @@ const g = globalThis as any;
  * The implementation of the {@linkcode CommandType} to run.
  */
 let Command = CommandType;
+let ShellCommand = ShellCommandType;
 if (g.process) {
-    Command = (await import("./node/mod.ts")).NodeCommand;
+    const { NodeCommand, NodeShellCommand } = await import("./node/mod.ts");
+    Command = NodeCommand;
+    ShellCommand = NodeShellCommand;
 } else if (g.Deno) {
-    Command = (await import("./deno/mod.ts")).DenoCommand;
+    const { DenoCommand, DenoShellCommand } = await import("./deno/mod.ts");
+    Command = DenoCommand;
+    ShellCommand = DenoShellCommand;
 } else {
     throw new Error("Unsupported runtime");
 }
 
-export { Command };
+export { Command, ShellCommand };
 
 /**
  * Creates a new command instance. This is a shorthand for creating a new

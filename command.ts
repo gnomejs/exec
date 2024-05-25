@@ -404,3 +404,78 @@ class PipeFactory {
 export interface CommandFactory {
     (file: string, args?: CommandArgs, options?: CommandOptions): Command;
 }
+
+/**
+ * Options for a shell command.
+ */
+export interface ShellCommandOptions extends CommandOptions {
+    /**
+     * Additional arguments to pass to the shell.
+     */
+    shellArgs?: string[];
+
+    /**
+     * Arguments for the command.
+     */
+    args?: CommandArgs;
+
+    /**
+     * Specifies whether the command is a file.
+     */
+    isFile?: boolean;
+}
+
+/**
+ * Represents a shell command.
+ */
+export class ShellCommand extends Command {
+    protected shellArgs?: string[];
+    protected script: string;
+    protected isFile?: boolean;
+
+    /**
+     * Creates a new instance of the ShellCommand class.
+     * @param exe The executable command.
+     * @param script The shell script or command to execute.
+     * @param options The options for the shell command.
+     */
+    constructor(exe: string, script: string, options?: ShellCommandOptions) {
+        super(exe, options?.args, options);
+        this.shellArgs = options?.shellArgs;
+        this.script = script;
+        this.isFile = options?.isFile;
+    }
+
+    /**
+     * Gets the file extension for the shell script.
+     * @returns The file extension.
+     */
+    get ext(): string {
+        return "";
+    }
+
+    /**
+     * Gets the shell arguments for the given script and file type.
+     * @param script The shell script or command.
+     * @param isFile Indicates whether the script is a file.
+     * @returns An array of shell arguments.
+     */
+    // deno-lint-ignore no-unused-vars
+    getShellArgs(script: string, isFile: boolean): string[] {
+        const args = this.shellArgs ?? [];
+        args.push(script);
+        return args;
+    }
+
+    /**
+     * Gets the script file information. The `file` property is undefined if the script is not a file.
+     * @returns An object containing the script file path and whether it was generated.
+     */
+    getScriptFile(): { file: string | undefined; generated: boolean } {
+        if (this.isFile || (!this.script.match(/\n/) && this.ext.length && this.script.trimEnd().endsWith(this.ext))) {
+            return { file: this.script, generated: false };
+        }
+
+        return { file: undefined, generated: false };
+    }
+}

@@ -1,7 +1,10 @@
-import type { ChildProcess, CommandOptions, CommandStatus, Output, Signal } from "../types.d.ts";
+import type { ChildProcess, CommandStatus, Output, Signal } from "../types.d.ts";
 import { type ChildProcess as Node2ChildProcess, type IOType, spawn, spawnSync } from "node:child_process";
 import { type CommandArgs, convertCommandArgs } from "../command-args.ts";
-import { Command } from "../command.ts";
+import { Command, ShellCommand, type ShellCommandOptions } from "../command.ts";
+import { remove, removeSync } from "@gnome/fs";
+import { pathFinder } from "../path-finder.ts";
+import { NotFoundOnPathError } from "../errors.ts";
 
 interface NodeCommonOutput {
     stdout: Uint8Array;
@@ -271,41 +274,20 @@ class NodeChildProcess implements ChildProcess {
         });
     }
 
+    onDispose?: (() => void) | undefined;
+
     async [Symbol.asyncDispose](): Promise<void> {
+        if (this.onDispose) {
+            this.onDispose();
+        }
+
         await this.status;
     }
 }
 
 export class NodeCommand extends Command {
-    constructor(exe: string, args: CommandArgs, options: CommandOptions) {
+    constructor(exe: string, args: CommandArgs, options: ShellCommandOptions) {
         super(exe, args, options);
-    }
-
-    runSync(): Output {
-        const args = this.args ? convertCommandArgs(this.args) : [];
-
-        const o = {
-            ...this.options,
-            stdio: "pipe",
-        };
-
-        const child = spawnSync(this.file, args, {
-            cwd: o.cwd,
-            env: o.env,
-            gid: o.gid,
-            uid: o.uid,
-            stdio: ["ignore", "inherit", "inherit"],
-            windowsVerbatimArguments: o.windowsRawArguments,
-        });
-
-        const code = child.status ? child.status : 1;
-        return new NodeOutput({
-            stdout: new Uint8Array(0),
-            stderr: new Uint8Array(0),
-            code: child.status ? child.status : 1,
-            signal: child.signal,
-            success: code === 0,
-        } as NodeCommonOutput);
     }
 
     async output(): Promise<Output> {
@@ -469,4 +451,196 @@ function mapPipe(pipe: "inherit" | "null" | "piped" | undefined): IOType | null 
         return "pipe";
     }
     return undefined;
+}
+
+export class NodeShellCommand extends ShellCommand {
+    constructor(exe: string, script: string, options?: ShellCommandOptions) {
+        super(exe, script, options);
+    }
+
+    async output(): Promise<Output> {
+        const exe = await pathFinder.findExe(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
+        const { file, generated } = this.getScriptFile();
+        const isFile = file !== undefined;
+        try {
+            const args = this.getShellArgs(isFile ? file : this.script, isFile);
+            if (isFile && this.args) {
+                const splat = convertCommandArgs(this.args);
+                args.push(...splat);
+            }
+
+            let signal: AbortSignal | undefined;
+            if (this.options?.signal) {
+                signal = this.options.signal;
+            }
+
+            const o = this.options ?? {};
+
+            o.stdin ??= "inherit";
+            o.stdout ??= "piped";
+            o.stderr ??= "piped";
+
+            const child = spawn(exe, args, {
+                cwd: o.cwd,
+                env: o.env,
+                gid: o.gid,
+                uid: o.uid,
+                stdio: [mapPipe(o.stdin), mapPipe(o.stdout), mapPipe(o.stderr)],
+                windowsVerbatimArguments: o.windowsRawArguments,
+                // deno-lint-ignore no-explicit-any
+                signal: signal as any,
+            });
+
+            let stdout = new Uint8Array(0);
+            let stderr = new Uint8Array(0);
+
+            let code = 1;
+            let sig: string | Signal | undefined;
+
+            const promises: Promise<void>[] = [];
+            if (child.stdout !== null) {
+                child.stdout.on("data", (data) => {
+                    stdout = new Uint8Array([...stdout, ...data]);
+                });
+            }
+
+            if (child.stderr !== null) {
+                child.stderr.on("data", (data) => {
+                    stderr = new Uint8Array([...stderr, ...data]);
+                });
+            }
+
+            promises.push(
+                new Promise<void>((resolve) => {
+                    if (child.stdout === null) {
+                        resolve();
+                        return;
+                    }
+
+                    child.stdout.on("end", () => {
+                        resolve();
+                    });
+                }),
+            );
+
+            promises.push(
+                new Promise<void>((resolve) => {
+                    if (child.stderr === null) {
+                        resolve();
+                        return;
+                    }
+
+                    child.stderr.on("end", () => {
+                        resolve();
+                    });
+                }),
+            );
+
+            promises.push(
+                new Promise<void>((resolve) => {
+                    child.on("exit", (c, s) => {
+                        code = c !== null ? c : 1;
+                        sig = s === null ? undefined : s;
+                        resolve();
+                    });
+                }),
+            );
+
+            await Promise.all(promises);
+
+            return new NodeOutput({
+                stdout: stdout,
+                stderr: stderr,
+                code: code,
+                signal: sig,
+                success: code === 0,
+            } as NodeCommonOutput);
+        } finally {
+            if (isFile && generated) {
+                await remove(file);
+            }
+        }
+    }
+
+    outputSync(): Output {
+        const { file, generated } = this.getScriptFile();
+        const isFile = file !== undefined;
+        try {
+            const args = this.getShellArgs(isFile ? file : this.script, isFile);
+            if (isFile && this.args) {
+                const splat = convertCommandArgs(this.args);
+                args.push(...splat);
+            }
+
+            const o = {
+                ...this.options,
+            };
+
+            o.stdin ??= "inherit";
+            o.stdout ??= "piped";
+            o.stderr ??= "piped";
+
+            const child = spawnSync(this.file, args, {
+                cwd: o.cwd,
+                env: o.env,
+                gid: o.gid,
+                uid: o.uid,
+                stdio: [mapPipe(o.stdin), mapPipe(o.stdout), mapPipe(o.stderr)],
+                windowsVerbatimArguments: o.windowsRawArguments,
+            });
+
+            const code = child.status ? child.status : 1;
+            return new NodeOutput({
+                stdout: new Uint8Array(0),
+                stderr: new Uint8Array(0),
+                code: child.status ? child.status : 1,
+                signal: child.signal,
+                success: code === 0,
+            } as NodeCommonOutput);
+        } finally {
+            if (isFile && generated) {
+                removeSync(file);
+            }
+        }
+    }
+
+    spawn(): ChildProcess {
+        const { file, generated } = this.getScriptFile();
+        const isFile = file !== undefined;
+        const args = this.getShellArgs(isFile ? file : this.script, isFile);
+        if (isFile && this.args) {
+            const splat = convertCommandArgs(this.args);
+            args.push(...splat);
+        }
+        const o = {
+            ...this.options,
+        };
+        o.stdout ??= "inherit";
+        o.stderr ??= "inherit";
+        o.stdin ??= "inherit";
+        const stdin = mapPipe(o.stdin);
+        const stdout = mapPipe(o.stdout);
+        const stderr = mapPipe(o.stderr);
+
+        const child = spawn(this.file, args, {
+            cwd: o.cwd,
+            env: o.env,
+            gid: o.gid,
+            uid: o.uid,
+            stdio: [stdin, stdout, stderr],
+            windowsVerbatimArguments: o.windowsRawArguments,
+        });
+
+        const proc = new NodeChildProcess(child, o.signal);
+        proc.onDispose = () => {
+            if (isFile && generated) {
+                removeSync(file);
+            }
+        };
+
+        return proc;
+    }
 }
