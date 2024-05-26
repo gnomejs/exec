@@ -1,5 +1,5 @@
 import type { CommandArgs } from "./command-args.ts";
-import { Command as CommandType, ShellCommand as ShellCommandType } from "./command.ts";
+import { Command as CommandType, ShellCommand as ShellCommandType, type ShellCommandOptions } from "./command.ts";
 import type { ChildProcess, CommandOptions, Output } from "./types.d.ts";
 // deno-lint-ignore no-explicit-any
 const g = globalThis as any;
@@ -21,7 +21,7 @@ if (g.process) {
     throw new Error("Unsupported runtime");
 }
 
-export { Command, ShellCommand };
+export { Command, ShellCommand, type ShellCommandOptions };
 
 /**
  * Creates a new command instance. This is a shorthand for creating a new
