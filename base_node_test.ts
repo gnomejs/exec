@@ -4,6 +4,8 @@ import {
     assertEquals as equals,
     assertFalse as no,
     assertNotEquals as notEquals,
+    assertThrows,
+    fail,
 } from "jsr:@std/assert@0.225.0";
 import { Command, ShellCommand } from "./base.ts";
 import { WINDOWS } from "@gnome/os-constants";
@@ -133,9 +135,45 @@ Deno.test({
 });
 
 Deno.test("Command with json", async () => {
-    const cmd = new Command("echo", ["{\"hello\": \"world\"}"]);
+    const cmd = new Command("echo", ['{"hello": "world"}']);
     const output = await cmd.json() as Record<string, string>;
     equals(output.hello, "world");
+});
+
+Deno.test("Command with log", async () => {
+    let f: string = "";
+    let args: string[] | undefined = [];
+
+    const cmd = new Command("echo", ["hello"], {
+        log: (file, a) => {
+            f = file;
+            args = a;
+        },
+    });
+    const output = await cmd.output();
+    equals(output.code, 0);
+    ok(f.endsWith("echo"));
+    ok(args !== undefined, "args is undefined");
+    equals(args.length, 1);
+});
+
+Deno.test("Command use validate", async () => {
+    const cmd = new Command("echo", ["hello"]);
+    const output = await cmd.output();
+    try {
+        output.validate();
+    } catch (_e) {
+        fail("Should not throw");
+    }
+
+    const cmd2 = new Command("git", ["clone"], { stderr: "piped", stdout: "piped" });
+    const output2 = await cmd2.output();
+    assertThrows(() => output2.validate());
+    try {
+        output2.validate((_) => true);
+    } catch (_e) {
+        fail("Should not throw");
+    }
 });
 
 class Pwsh extends ShellCommand {
@@ -177,8 +215,6 @@ Deno.test("ShellCommand - Get ext", () => {
     equals(ext, ".ps1");
 });
 
-
-
 Deno.test("ShellCommand with inline", async () => {
     const cmd = new Pwsh("Write-Host 'Hello, World!'");
     const output = await cmd.output();
@@ -204,4 +240,4 @@ Deno.test("ShellCommand with spawn", async () => {
     equals(output.code, 0);
     equals(output.text(), "Hello, World!\n");
     await remove("hello2.ps1");
-})
+});

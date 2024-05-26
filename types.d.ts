@@ -41,6 +41,8 @@ export interface Output {
     signal?: string;
     success: boolean;
 
+    validate(fn?: (code: number) => boolean, failOnStderr?: true): this;
+
     text(): string;
     lines(): string[];
     json(): unknown;
@@ -148,6 +150,15 @@ export interface CommandOptions {
      * Defaults to `"piped"` for `output` & `outputSync`,
      * and `"inherit"` for `spawn`. */
     stderr?: "piped" | "inherit" | "null";
+
+    /**
+     * Log the command that will be executed. Generally used to
+     * log to standard output.
+     * @param file The executable file that will be invoked.
+     * @param args The arguments to pass to the executable.
+     * @returns void
+     */
+    log?: (file: string, args?: string[]) => void;
 
     /** Skips quoting and escaping of the arguments on windows. This option
      * is ignored on non-windows platforms.

@@ -4,9 +4,11 @@ import { type CommandArgs, convertCommandArgs } from "../command-args.ts";
 import { Command, ShellCommand, type ShellCommandOptions } from "../command.ts";
 import { remove, removeSync } from "@gnome/fs";
 import { pathFinder } from "../path-finder.ts";
-import { NotFoundOnPathError } from "../errors.ts";
+import { CommandError, NotFoundOnPathError } from "../errors.ts";
 
 interface NodeCommonOutput {
+    file: string;
+    args?: string[];
     stdout: Uint8Array;
     stderr: Uint8Array;
     code: number;
@@ -21,6 +23,8 @@ export class NodeOutput implements Output {
     #errorText?: string;
     #errorLines?: string[];
     #errorJson?: unknown;
+    #file: string;
+    #args?: string[];
     readonly stdout: Uint8Array;
     readonly stderr: Uint8Array;
     readonly code: number;
@@ -33,6 +37,22 @@ export class NodeOutput implements Output {
         this.code = output.code;
         this.signal = output.signal as string;
         this.success = output.success;
+        this.#file = output.file;
+        this.#args = output.args;
+    }
+
+    validate(fn?: ((code: number) => boolean) | undefined, failOnStderr?: true | undefined): this {
+        fn ??= (code: number) => code === 0;
+
+        if (!fn(this.code)) {
+            throw new CommandError(this.#file, this.code);
+        }
+
+        if (failOnStderr && this.stderr.length > 0) {
+            throw new CommandError(this.#file, this.code, `Command failed with stderr: ${this.errorText()}`);
+        }
+
+        return this;
     }
 
     text(): string {
@@ -109,9 +129,11 @@ class NodeChildProcess implements ChildProcess {
     #stderr?: ReadableStream<Uint8Array>;
     #stdin?: WritableStream<Uint8Array>;
     #status: Promise<CommandStatus>;
+    #file: string;
 
-    constructor(child: Node2ChildProcess, signal?: AbortSignal) {
+    constructor(child: Node2ChildProcess, file: string, signal?: AbortSignal) {
         this.#child = child;
+        this.#file = file;
 
         if (signal !== undefined) {
             signal.addEventListener("abort", () => {
@@ -262,6 +284,7 @@ class NodeChildProcess implements ChildProcess {
 
             this.#child.on("exit", (code, signal) => {
                 const o = {
+                    file: this.#file,
                     stdout: stdout,
                     stderr: stderr,
                     code: code,
@@ -291,6 +314,10 @@ export class NodeCommand extends Command {
     }
 
     async output(): Promise<Output> {
+        const exe = await pathFinder.findExe(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
         const args = this.args ? convertCommandArgs(this.args) : [];
         let signal: AbortSignal | undefined;
         if (this.options?.signal) {
@@ -303,7 +330,7 @@ export class NodeCommand extends Command {
         o.stdout ??= "piped";
         o.stderr ??= "piped";
 
-        const child = spawn(this.file, args, {
+        const child = spawn(exe, args, {
             cwd: o.cwd,
             env: o.env,
             gid: o.gid,
@@ -313,6 +340,9 @@ export class NodeCommand extends Command {
             // deno-lint-ignore no-explicit-any
             signal: signal as any,
         });
+        if (this.options?.log) {
+            this.options.log(exe, args);
+        }
 
         let stdout = new Uint8Array(0);
         let stderr = new Uint8Array(0);
@@ -372,6 +402,7 @@ export class NodeCommand extends Command {
         await Promise.all(promises);
 
         return new NodeOutput({
+            file: this.file,
             stdout: stdout,
             stderr: stderr,
             code: code,
@@ -381,6 +412,10 @@ export class NodeCommand extends Command {
     }
 
     outputSync(): Output {
+        const exe = pathFinder.findExeSync(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
         const args = this.args ? convertCommandArgs(this.args) : [];
 
         const o = {
@@ -390,8 +425,11 @@ export class NodeCommand extends Command {
         o.stdin ??= "inherit";
         o.stdout ??= "piped";
         o.stderr ??= "piped";
+        if (this.options?.log) {
+            this.options.log(exe, args);
+        }
 
-        const child = spawnSync(this.file, args, {
+        const child = spawnSync(exe, args, {
             cwd: o.cwd,
             env: o.env,
             gid: o.gid,
@@ -402,6 +440,7 @@ export class NodeCommand extends Command {
 
         const code = child.status ? child.status : 1;
         return new NodeOutput({
+            file: this.file,
             stdout: new Uint8Array(0),
             stderr: new Uint8Array(0),
             code: child.status ? child.status : 1,
@@ -411,6 +450,10 @@ export class NodeCommand extends Command {
     }
 
     spawn(): ChildProcess {
+        const exe = pathFinder.findExeSync(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
         const args = this.args ? convertCommandArgs(this.args) : [];
 
         const o = {
@@ -422,8 +465,11 @@ export class NodeCommand extends Command {
         const stdin = mapPipe(o.stdin);
         const stdout = mapPipe(o.stdout);
         const stderr = mapPipe(o.stderr);
+        if (this.options?.log) {
+            this.options.log(exe, args);
+        }
 
-        const child = spawn(this.file, args, {
+        const child = spawn(exe, args, {
             cwd: o.cwd,
             env: o.env,
             gid: o.gid,
@@ -432,7 +478,7 @@ export class NodeCommand extends Command {
             windowsVerbatimArguments: o.windowsRawArguments,
         });
 
-        return new NodeChildProcess(child, o.signal);
+        return new NodeChildProcess(child, this.file, o.signal);
     }
 }
 
@@ -482,7 +528,9 @@ export class NodeShellCommand extends ShellCommand {
             o.stdin ??= "inherit";
             o.stdout ??= "piped";
             o.stderr ??= "piped";
-
+            if (this.options?.log) {
+                this.options.log(exe, args);
+            }
             const child = spawn(exe, args, {
                 cwd: o.cwd,
                 env: o.env,
@@ -552,6 +600,7 @@ export class NodeShellCommand extends ShellCommand {
             await Promise.all(promises);
 
             return new NodeOutput({
+                file: exe,
                 stdout: stdout,
                 stderr: stderr,
                 code: code,
@@ -566,6 +615,10 @@ export class NodeShellCommand extends ShellCommand {
     }
 
     outputSync(): Output {
+        const exe = pathFinder.findExeSync(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
         const { file, generated } = this.getScriptFile();
         const isFile = file !== undefined;
         try {
@@ -582,6 +635,9 @@ export class NodeShellCommand extends ShellCommand {
             o.stdin ??= "inherit";
             o.stdout ??= "piped";
             o.stderr ??= "piped";
+            if (this.options?.log) {
+                this.options.log(exe, args);
+            }
 
             const child = spawnSync(this.file, args, {
                 cwd: o.cwd,
@@ -592,8 +648,13 @@ export class NodeShellCommand extends ShellCommand {
                 windowsVerbatimArguments: o.windowsRawArguments,
             });
 
+            if (this.options?.log) {
+                this.options.log(this.file, args);
+            }
+
             const code = child.status ? child.status : 1;
             return new NodeOutput({
+                file: this.file,
                 stdout: new Uint8Array(0),
                 stderr: new Uint8Array(0),
                 code: child.status ? child.status : 1,
@@ -608,6 +669,10 @@ export class NodeShellCommand extends ShellCommand {
     }
 
     spawn(): ChildProcess {
+        const exe = pathFinder.findExeSync(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
         const { file, generated } = this.getScriptFile();
         const isFile = file !== undefined;
         const args = this.getShellArgs(isFile ? file : this.script, isFile);
@@ -624,8 +689,10 @@ export class NodeShellCommand extends ShellCommand {
         const stdin = mapPipe(o.stdin);
         const stdout = mapPipe(o.stdout);
         const stderr = mapPipe(o.stderr);
-
-        const child = spawn(this.file, args, {
+        if (this.options?.log) {
+            this.options.log(exe, args);
+        }
+        const child = spawn(exe, args, {
             cwd: o.cwd,
             env: o.env,
             gid: o.gid,
@@ -634,7 +701,7 @@ export class NodeShellCommand extends ShellCommand {
             windowsVerbatimArguments: o.windowsRawArguments,
         });
 
-        const proc = new NodeChildProcess(child, o.signal);
+        const proc = new NodeChildProcess(child, this.file, o.signal);
         proc.onDispose = () => {
             if (isFile && generated) {
                 removeSync(file);

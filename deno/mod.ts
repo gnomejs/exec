@@ -3,14 +3,18 @@ import type { ChildProcess, CommandOptions, CommandStatus, Output, Signal } from
 import { type CommandArgs, convertCommandArgs } from "../command-args.ts";
 import { Command, ShellCommand } from "../command.ts";
 import { remove, removeSync } from "@gnome/fs";
+import { CommandError, NotFoundOnPathError } from "../errors.ts";
+import { pathFinder } from "../path-finder.ts";
 
 class DenoChildProcess implements ChildProcess {
     #childProcess: Deno.ChildProcess;
     #options: CommandOptions;
+    #file: string;
 
-    constructor(childProcess: Deno.ChildProcess, options: CommandOptions) {
+    constructor(childProcess: Deno.ChildProcess, options: CommandOptions, file: string) {
         this.#childProcess = childProcess;
         this.#options = options;
+        this.#file = file;
     }
 
     get stdin(): WritableStream<Uint8Array> {
@@ -50,7 +54,7 @@ class DenoChildProcess implements ChildProcess {
             code: out.code,
             signal: out.signal,
             success: out.success,
-        });
+        }, this.#file);
     }
 
     kill(signo?: Signal): void {
@@ -75,18 +79,33 @@ class DenoOutput implements Output {
     #errorText?: string;
     #errorLines?: string[];
     #errorJson?: unknown;
+    #file: string;
     readonly stdout: Uint8Array;
     readonly stderr: Uint8Array;
     readonly code: number;
     readonly signal?: string | undefined;
     readonly success: boolean;
 
-    constructor(output: Deno.CommandOutput) {
+    constructor(output: Deno.CommandOutput, file: string) {
         this.stdout = output.stdout;
         this.stderr = output.stderr;
         this.code = output.code;
         this.signal = output.signal as string;
         this.success = output.success;
+        this.#file = file;
+    }
+
+    validate(fn?: ((code: number) => boolean) | undefined, failOnStderr?: true | undefined): this {
+        fn ??= (code: number) => code === 0;
+        if (!fn(this.code)) {
+            throw new CommandError(this.#file, this.code);
+        }
+
+        if (failOnStderr && this.stderr.length > 0) {
+            throw new CommandError(this.#file, this.code, `${this.#file} failed with stderr: ${this.errorText()}`);
+        }
+
+        return this;
     }
 
     text(): string {
@@ -163,6 +182,11 @@ export class DenoCommand extends Command {
     }
 
     outputSync(): Output {
+        const exe = pathFinder.findExeSync(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
+
         const args = this.args ? convertCommandArgs(this.args) : undefined;
         const options = {
             ...this.options,
@@ -172,8 +196,11 @@ export class DenoCommand extends Command {
         options.stdout ??= "piped";
         options.stderr ??= "piped";
         options.stdin ??= "inherit";
+        if (this.options?.log) {
+            this.options?.log(exe, args);
+        }
 
-        const process = new Deno.Command(this.file, options);
+        const process = new Deno.Command(exe, options);
         const out = process.outputSync();
 
         return new DenoOutput({
@@ -182,10 +209,14 @@ export class DenoCommand extends Command {
             code: out.code,
             signal: out.signal,
             success: out.success,
-        });
+        }, this.file);
     }
 
     async output(): Promise<Output> {
+        const exe = await pathFinder.findExe(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
         const args = this.args ? convertCommandArgs(this.args) : undefined;
         const options = {
             ...this.options,
@@ -196,7 +227,11 @@ export class DenoCommand extends Command {
         options.stderr ??= "piped";
         options.stdin ??= "inherit";
 
-        const process = new Deno.Command(this.file, options);
+        if (this.options?.log) {
+            this.options?.log(exe, args);
+        }
+
+        const process = new Deno.Command(exe, options);
         const out = await process.output();
 
         return new DenoOutput({
@@ -205,23 +240,35 @@ export class DenoCommand extends Command {
             code: out.code,
             signal: out.signal,
             success: out.success,
-        });
+        }, this.file);
     }
 
     spawn(): ChildProcess {
+        const exe = pathFinder.findExeSync(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
         const args = this.args ? convertCommandArgs(this.args) : undefined;
         const options = {
             ...this.options,
             args: args,
         } as Deno.CommandOptions;
 
-        const process = new Deno.Command(this.file, options);
-        return new DenoChildProcess(process.spawn(), options);
+        if (this.options?.log) {
+            this.options?.log(exe, args);
+        }
+
+        const process = new Deno.Command(exe, options);
+        return new DenoChildProcess(process.spawn(), options, this.file);
     }
 }
 
 export class DenoShellCommand extends ShellCommand {
     outputSync(): Output {
+        const exe = pathFinder.findExeSync(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
         const { file, generated } = this.getScriptFile();
         const isFile = file !== undefined;
         try {
@@ -239,8 +286,11 @@ export class DenoShellCommand extends ShellCommand {
             options.stdout ??= "piped";
             options.stderr ??= "piped";
             options.stdin ??= "inherit";
+            if (this.options?.log) {
+                this.options?.log(exe, args);
+            }
 
-            const process = new Deno.Command(this.file, options);
+            const process = new Deno.Command(exe, options);
             const out = process.outputSync();
 
             return new DenoOutput({
@@ -249,7 +299,7 @@ export class DenoShellCommand extends ShellCommand {
                 code: out.code,
                 signal: out.signal,
                 success: out.success,
-            });
+            }, this.file);
         } finally {
             if (isFile && generated) {
                 removeSync(file);
@@ -258,6 +308,10 @@ export class DenoShellCommand extends ShellCommand {
     }
 
     async output(): Promise<Output> {
+        const exe = await pathFinder.findExe(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
         const { file, generated } = this.getScriptFile();
         const isFile = file !== undefined;
         try {
@@ -275,8 +329,11 @@ export class DenoShellCommand extends ShellCommand {
             options.stdout ??= "piped";
             options.stderr ??= "piped";
             options.stdin ??= "inherit";
+            if (this.options?.log) {
+                this.options?.log(exe, args);
+            }
 
-            const process = new Deno.Command(this.file, options);
+            const process = new Deno.Command(exe, options);
             const out = await process.output();
 
             return new DenoOutput({
@@ -285,7 +342,7 @@ export class DenoShellCommand extends ShellCommand {
                 code: out.code,
                 signal: out.signal,
                 success: out.success,
-            });
+            }, this.file);
         } finally {
             if (isFile && generated) {
                 await remove(file);
@@ -294,6 +351,10 @@ export class DenoShellCommand extends ShellCommand {
     }
 
     spawn(): ChildProcess {
+        const exe = pathFinder.findExeSync(this.file);
+        if (exe === undefined) {
+            throw new NotFoundOnPathError(this.file);
+        }
         const { file, generated } = this.getScriptFile();
         const isFile = file !== undefined;
         const args = this.getShellArgs(isFile ? file : this.script, isFile);
@@ -307,8 +368,12 @@ export class DenoShellCommand extends ShellCommand {
             args: args,
         } as Deno.CommandOptions;
 
-        const process = new Deno.Command(this.file, options);
-        const proc = new DenoChildProcess(process.spawn(), options);
+        if (this.options?.log) {
+            this.options?.log(exe, args);
+        }
+
+        const process = new Deno.Command(exe, options);
+        const proc = new DenoChildProcess(process.spawn(), options, this.file);
         proc.onDispose = () => {
             if (isFile && generated) {
                 removeSync(file);
