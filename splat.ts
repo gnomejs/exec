@@ -89,7 +89,7 @@ export interface SplatOptions {
  * ```
  */
 export interface SplatObject extends Record<string, unknown> {
-    splat: SplatOptions;
+    splat?: SplatOptions;
 }
 
 /**
