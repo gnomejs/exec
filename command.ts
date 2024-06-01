@@ -1,4 +1,4 @@
-import type { CommandArgs } from "./command-args.ts";
+import { convertCommandArgs, type CommandArgs } from "./command-args.ts";
 import type { ChildProcess, CommandOptions, Output } from "./types.d.ts";
 
 /**
@@ -21,6 +21,11 @@ export class Command {
         this.file = file;
         this.args = args;
         this.options = options ?? {};
+    }
+
+    toArgs(): string[] {
+        const args = convertCommandArgs(this.args ?? []);
+        return [this.file, ...args];
     }
 
     /**
@@ -452,6 +457,12 @@ export class ShellCommand extends Command {
      */
     get ext(): string {
         return "";
+    }
+
+    override toArgs(): string[] {
+        const {file, generated } = this.getScriptFile()
+        const args = this.getShellArgs(file ?? this.script, generated || (this.isFile ?? false));
+        return [this.file, ...args];
     }
 
     /**

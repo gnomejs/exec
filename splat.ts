@@ -166,9 +166,7 @@ export function splat(
         argz.length = options.arguments.length;
     }
 
-    if (options?.command?.length) {
-        splat.push(...options.command);
-    }
+    
 
     for (let [key, value] of Object.entries(object)) {
         let pushArguments = makeArguments;
@@ -274,8 +272,17 @@ export function splat(
         if (options.appendArguments) {
             splat.push(...unwrapped);
         } else {
-            splat.splice(0, 0, ...unwrapped);
+            splat.unshift(...unwrapped);
         }
+    }
+
+    // add the command to the beginning of the parameters
+    if (options?.command?.length) {
+        if (typeof options.command === "string") {
+            options.command = options.command.split(" ").filter((c) => c.trim().length > 0);
+        }
+
+        splat.unshift(...options.command);
     }
 
     return splat;
