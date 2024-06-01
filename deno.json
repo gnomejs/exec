@@ -1,11 +1,12 @@
 {
     "name": "@gnome/exec",
-    "version": "0.4.3",
+    "version": "0.4.4",
     "exports": {
         ".": "./mod.ts",
         "./deno": "./deno/mod.ts",
         "./node": "./node/mod.ts",
         "./command": "./base.ts",
+        "./command-base": "./command.ts",
         "./command-args": "./command-args.ts",
         "./path-finder": "./path-finder.ts",
         "./splat": "./splat.ts",
